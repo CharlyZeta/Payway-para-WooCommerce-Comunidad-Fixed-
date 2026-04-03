@@ -1,0 +1,29 @@
+Version 0.4.3
+- Feature: Implementado marcador visual destacado (escudo de verificación) para pedidos protegidos por 3DS en la vista de administración.
+- Feature: Añadida persistencia de autenticación 3DS en los metadatos de la orden para auditoría y seguridad.
+- UX/UI: Mejora en la visualización de la información de pago de Payway en el panel de control.
+
+Version 0.4.2
+- UX/UI: Corregido error visual de desalineación en la etiqueta de "Nombre" del checkout.
+- UX/UI: Agrupación optimizada de campos de Dirección y Altura en una sola fila (50/50).
+- UX/UI: Ajuste de ancho completo para el campo CVV para evitar solapamientos.
+
+Version 0.4.1
+- Feature: Implementado sistema de detección de "Checkout por Bloques" con Aviso de Administrador y enlace directo para corrección.
+- Feature: Declarada compatibilidad oficial con HPOS (High Performance Order Storage) de WooCommerce.
+- Enhancement: Implementado mapeo de provincias de Argentina para CyberSource (según manual 2024), eliminando rechazos por formato de estado.
+- Fix: Corregida lógica de `needs_setup` que ocultaba el botón de pago incluso con credenciales cargadas.
+- Fix: Mejorada la consulta de promociones aplicables para soportar variaciones de formato en la base de datos y desfases de zona horaria (WP Local Time).
+- Debug: Añadido sistema de logs detallados de disponibilidad en modo Sandbox para diagnóstico rápido.
+
+Version 0.4.0
+- Security: Eliminado el código de simulación (MOCK) en el callback de 3D Secure.
+- Security: Implementada validación real del estado del pago mediante consulta a la API de Payway (`get_payment_info`) tras el desafío bancario.
+- Security: Eliminadas URLs de fallback falsas para desafíos 3DS.
+- Precision: Refactorizada la conversión de montos a centavos (enteros) utilizando redondeo matemático robusto para evitar errores de precisión.
+- Logic: Estandarizada la comunicación de montos hacia CyberSource y el resto de la pasarela para evitar fallos por configuraciones regionales de moneda.
+- Fix: Parcheada la librería interna del SDK (`rmDecAmount`) para garantizar exactitud en el cobro de centavos.
+- UX/UI: Rediseño completo del formulario de checkout para que sea 100% responsivo.
+- UX/UI: Implementada agrupación inteligente de campos (Expiración, CVV, DNI) en filas.
+- Robustness: Eliminada la dependencia de "scraping" del DOM para obtener el total del carrito; inyección segura vía backend.
+- Cleanup: Eliminados bloques de código JavaScript obsoletos y comentados.

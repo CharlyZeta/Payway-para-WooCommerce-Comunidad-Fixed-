@@ -1,0 +1,82 @@
+/* Contenedor principal del formulario */
+.wc-gateway-payway {
+    width: 100%;
+    margin: 10px 0;
+    padding: 0;
+    border: none;
+}
+
+/* Ajuste de la descripción superior */
+.wc-gateway-payway .fieldset-description {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 15px;
+    line-height: 1.4;
+}
+
+/* Contenedor de errores */
+.wc-gateway-payway #error_container {
+    margin: 15px 0;
+    padding: 10px 15px;
+    color: #a94442;
+    background-color: #f2dede;
+    border-left: 5px solid #a94442;
+    border-radius: 4px;
+    font-size: 0.9em;
+    display: none;
+}
+
+/* Filas del formulario */
+.wc-gateway-payway .form-row {
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.wc-gateway-payway .form-row label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.wc-gateway-payway .input-text,
+.wc-gateway-payway select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    height: auto;
+}
+
+/* Agrupación de campos cortos (Exp y CVV) */
+@media (min-width: 480px) {
+    .wc-gateway-payway .form-row-half {
+        width: 48%;
+        float: left;
+        clear: none;
+    }
+    .wc-gateway-payway .form-row-half:nth-of-type(odd) {
+        margin-right: 4%;
+    }
+    .wc-gateway-payway .fields-wrapper::after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+}
+
+/* Feedback de validación nativo de WooCommerce */
+.woocommerce-checkout form .wc-gateway-payway .form-row.woocommerce-invalid input.input-text,
+.woocommerce-checkout form .wc-gateway-payway .form-row.woocommerce-invalid select {
+    border-color: #a00;
+}
+.woocommerce-checkout form .wc-gateway-payway .form-row.woocommerce-validated input.input-text,
+.woocommerce-checkout form .wc-gateway-payway .form-row.woocommerce-validated select {
+    border-color: #5b841b;
+}
+
+/* Ocultar elementos visuales antiguos */
+.card-wrapper {
+    display: none;
+}
