@@ -170,7 +170,6 @@ class WC_Payway_Request_Builder {
 	 */
 	public function process()
 	{
-		$request = $this->request;
 		$result = array();
 
 		do_action('wc_payway_request_builder_process_before', $this);
