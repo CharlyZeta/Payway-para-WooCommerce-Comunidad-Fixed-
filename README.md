@@ -51,6 +51,9 @@ Para la instalación puede optar por subir el plugin a través del Administrador
 ## Mejoras de la Versión 0.4.x
 Esta versión introduce cambios críticos de seguridad y precisión:
 
+### 🚀 Actualización del SDK Oficial (v2.x)
+Se actualizó el núcleo de comunicación (antiguo SDK de Decidir v1.4.0) a la versión oficial y más reciente de Payway (`sdk-php-ventaonline` v2.x). Esto garantiza plena compatibilidad con las especificaciones modernas de seguridad de la API y soporte extendido para PHP 8.x.
+
 ### 🛡️ Seguridad 3D Secure Real
 Se ha eliminado el código de simulación (MOCK). El plugin ahora realiza una validación criptográfica real con la API de Payway tras el desafío bancario, garantizando que solo los pagos autenticados sean aprobados.
 
@@ -77,6 +80,11 @@ En el menú "Payway" podrá configurar:
 ---
 
 # Changelog
+
+## 0.4.4
+- **Security / Core**: Actualización del SDK interno de Decidir (v1.4.0) al nuevo SDK oficial de Payway (`sdk-php-ventaonline` v2.x).
+- **Core**: Refactorización de la instanciación de `\Decidir\Connector` en `class-wc-payway-gateway-api-handler.php` para soportar la firma moderna del SDK (eliminación de parámetros obsoletos).
+- **Cleanup**: Eliminación de dependencias y archivos obsoletos del SDK antiguo, adoptando la estructura PSR-4 limpia del nuevo repositorio.
 
 ## 0.4.3
 - **Feature**: Marcador visual destacado (escudo🛡️) para pedidos protegidos por 3DS en el administrador.

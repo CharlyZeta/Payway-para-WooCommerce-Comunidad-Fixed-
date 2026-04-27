@@ -70,10 +70,7 @@ class WC_Payway_Api_Handler {
 
 		$this->connector = new \Decidir\Connector(
 			$this->credentials,
-			$this->type,
-			WC_Payway_Rest_Interface::CONNECTOR_DEVELOPER,
-			WC_Payway_Rest_Interface::CONNECTOR_GROUPER,
-			WC_Payway_Rest_Interface::CONNECTOR_SERVICE
+			$this->type
 		);
 	}
 
