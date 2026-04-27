@@ -1,3 +1,8 @@
+Version 0.4.4
+- Security / Core: Actualización del SDK interno de Decidir (v1.4.0) al nuevo SDK oficial de Payway (sdk-php-ventaonline v2.x).
+- Core: Refactorización de la instanciación de \Decidir\Connector para soportar la firma moderna del SDK (eliminación de parámetros obsoletos).
+- Cleanup: Reorganización de la carpeta decidir/ adoptando una estructura PSR-4 limpia y eliminación de archivos heredados del SDK antiguo.
+
 Version 0.4.3
 - Feature: Implementado marcador visual destacado (escudo de verificación) para pedidos protegidos por 3DS en la vista de administración.
 - Feature: Añadida persistencia de autenticación 3DS en los metadatos de la orden para auditoría y seguridad.
