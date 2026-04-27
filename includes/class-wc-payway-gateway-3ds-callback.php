@@ -40,7 +40,7 @@ class WC_Payway_Gateway_3DS_Callback {
 
 			if ( isset($data['status']) && $data['status'] === 'approved' ) {
 				$order->payment_complete( $transaction_id );
-				$order->add_order_note( __('3D Secure Challenge completado exitosamente vía Callback.', 'wc-gateway-payway') );
+				$order->add_order_note( __('🛡️ Pago validado exitosamente mediante el protocolo 3D Secure (Autenticación Bancaria).', 'wc-gateway-payway') );
 				
 				// Mark as 3DS authenticated
 				WC_Payway_Meta::set_order_3ds_authenticated( $order_id, 'yes' );

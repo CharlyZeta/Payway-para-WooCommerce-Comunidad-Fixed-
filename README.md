@@ -84,6 +84,8 @@ En el menú "Payway" podrá configurar:
 ## 0.4.4
 - **Security / Core**: Actualización del SDK interno de Decidir (v1.4.0) al nuevo SDK oficial de Payway (`sdk-php-ventaonline` v2.x).
 - **Core**: Refactorización de la instanciación de `\Decidir\Connector` en `class-wc-payway-gateway-api-handler.php` para soportar la firma moderna del SDK (eliminación de parámetros obsoletos).
+- **UX/UI**: Rediseño completo del formulario de checkout en JavaScript para mayor estabilidad y sincronización dinámica de cuotas.
+- **Feature**: Implementación de notificaciones automáticas con escudo visual (🛡️) en las notas del pedido para transacciones validadas vía 3D Secure.
 - **Cleanup**: Eliminación de dependencias y archivos obsoletos del SDK antiguo, adoptando la estructura PSR-4 limpia del nuevo repositorio.
 
 ## 0.4.3
