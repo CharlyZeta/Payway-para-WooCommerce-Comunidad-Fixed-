@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 
@@ -213,6 +213,34 @@ class WC_Payway_Meta implements WC_Payway_Meta_Interface {
 		return get_post_meta(
 			$order_id,
 			self::get_full_meta_name( static::THREE_DS_AUTHENTICATED ),
+			true
+		);
+	}
+
+	/**
+	 * Sets the rejection reason message
+	 *
+	 * @param int $order_id
+	 * @param string $reason
+	 */
+	public static function set_order_rejection_reason( $order_id, $reason ) {
+		update_post_meta(
+			$order_id,
+			self::get_full_meta_name( static::REJECTION_REASON ),
+			$reason
+		);
+	}
+
+	/**
+	 * Gets the rejection reason message
+	 *
+	 * @param int $order_id
+	 * @return string
+	 */
+	public static function get_order_rejection_reason( $order_id ) {
+		return get_post_meta(
+			$order_id,
+			self::get_full_meta_name( static::REJECTION_REASON ),
 			true
 		);
 	}

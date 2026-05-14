@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 

@@ -49,13 +49,16 @@ Para la instalación puede optar por subir el plugin a través del Administrador
 | Site Id / Keys | Credenciales proporcionadas por Payway para cada entorno. |
 
 ## Mejoras de la Versión 0.4.x
-Esta versión introduce cambios críticos de seguridad y precisión:
-
-### 🚀 Actualización del SDK Oficial (v2.x)
-Se actualizó el núcleo de comunicación (antiguo SDK de Decidir v1.4.0) a la versión oficial y más reciente de Payway (`sdk-php-ventaonline` v2.x). Esto garantiza plena compatibilidad con las especificaciones modernas de seguridad de la API y soporte extendido para PHP 8.x.
+Esta versión introduce cambios críticos de seguridad, precisión y comunicación con el usuario:
 
 ### 🛡️ Seguridad 3D Secure Real
 Se ha eliminado el código de simulación (MOCK). El plugin ahora realiza una validación criptográfica real con la API de Payway tras el desafío bancario, garantizando que solo los pagos autenticados sean aprobados.
+
+### 💬 Mensajes de Error Profesionales
+Se ha refactorizado el motor de excepciones para traducir errores técnicos de la API y CyberSource en mensajes comprensibles para el cliente final. Se eliminaron alertas genéricas como "request_error", reemplazándolas por instrucciones claras según el motivo del rechazo (fondos, expiración, seguridad, etc.).
+
+### 🔍 Logging de Diagnóstico Avanzado
+El plugin ahora registra logs detallados de las peticiones a Payway y CyberSource en *WooCommerce > Estado > Registros*. Esto permite a los administradores diagnosticar rápidamente rechazos por fraude o errores de configuración sin necesidad de depurar el código.
 
 ### 💰 Precisión en Montos (Argentina)
 Se ha refactorizado la lógica de conversión. El plugin ahora convierte matemáticamente el total a centavos (enteros), eliminando errores por separadores decimales (punto/coma) y permitiendo configurar WooCommerce con **0 decimales** de forma segura.
@@ -80,13 +83,6 @@ En el menú "Payway" podrá configurar:
 ---
 
 # Changelog
-
-## 0.4.4
-- **Security / Core**: Actualización del SDK interno de Decidir (v1.4.0) al nuevo SDK oficial de Payway (`sdk-php-ventaonline` v2.x).
-- **Core**: Refactorización de la instanciación de `\Decidir\Connector` en `class-wc-payway-gateway-api-handler.php` para soportar la firma moderna del SDK (eliminación de parámetros obsoletos).
-- **UX/UI**: Rediseño completo del formulario de checkout en JavaScript para mayor estabilidad y sincronización dinámica de cuotas.
-- **Feature**: Implementación de notificaciones automáticas con escudo visual (🛡️) en las notas del pedido para transacciones validadas vía 3D Secure.
-- **Cleanup**: Eliminación de dependencias y archivos obsoletos del SDK antiguo, adoptando la estructura PSR-4 limpia del nuevo repositorio.
 
 ## 0.4.3
 - **Feature**: Marcador visual destacado (escudo🛡️) para pedidos protegidos por 3DS en el administrador.

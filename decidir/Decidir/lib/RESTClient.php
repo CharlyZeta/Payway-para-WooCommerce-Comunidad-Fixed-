@@ -12,10 +12,8 @@ class RESTClient{
 	public $jsonData = NULL;
 	public $service = NULL;
 
-    const DECIDIR_ENDPOINT_DESA = "http://decidir.payway-dev.tanzu.intra";
-	const DECIDIR_ENDPOINT_QA = "http://decidir.payway-qa.tanzu.intra";
-    const DECIDIR_ENDPOINT_TEST = "https://developers.decidir.com";
-    const DECIDIR_ENDPOINT_PROD = "https://ventasonline.payway.com.ar";
+	const DECIDIR_ENDPOINT_TEST = "https://developers.decidir.com";
+	const DECIDIR_ENDPOINT_PROD = "https://api.decidir.com";
 	const DECIDIR_ENDPOINT_FORM_PROD = "https://live.decidir.com";
 	//const DECIDIR_ENDPOINT_TEST = "http://localhost:9001/";
 
@@ -25,40 +23,23 @@ class RESTClient{
         $this->grouper = $grouper;
         $this->service = $service;
 
-        if($mode == "desa") {
-            $this->endpoint = self::DECIDIR_ENDPOINT_DESA;
-        } elseif($mode == "test") {
+		if($mode == "test") {
 			$this->endpoint = self::DECIDIR_ENDPOINT_TEST;
-		} elseif ($mode == "qa") {	
-			$this->endpoint = self::DECIDIR_ENDPOINT_QA;
 		} elseif ($mode == "prod") {	
 			$this->endpoint = self::DECIDIR_ENDPOINT_PROD;
 		}
 	}
 
 	public function setUrl($url){
-		
-		if($url != 'validate' && $url !== 'forms'){
-			if ($url == 'checkout-payment-button/link'){
-				$this->url = $this->endpoint.'/api/v1/'.$url;
-				return;
-			}
-			if ($url == 'closures/batchclosure'){
-				$this->url = $this->endpoint.'/api/v1/'.$url;
-				return;
-			}
-			if ($url == 'transaction_gateway/tokens' || $url =='transaction_gateway/payments'){
-				$this->url = $this->endpoint.'/api/v1/'.$url;
-				return;
-			}
-			$this->url = $this->endpoint.'/api/v2/'.$url;
-			
+		if($url != 'validate'){
+			$this->endpoint = $this->endpoint.'/api/v2/'.$url;
 			//Para testing local es probable que se requiera modificar el concatenado del URL..
 			//$this->endpoint = $this->endpoint.$url;
 		}else{	
-			$this->url = $this->endpoint.'/web/'.$url;
+			$this->endpoint = $this->endpoint.'/web/'.$url;
 		}
 
+		$this->url = $this->endpoint;
 	}
 
 	public function getUrl($url){
@@ -68,13 +49,12 @@ class RESTClient{
 	public function setKey($action){
 		$this->action = $action;
 
-		if($action == 'healthcheck' || $action == 'checkout-payment-button/link'){
-            $this->key = $this->keys_data['private_key'];
+		if($action == 'healthcheck'){
+			$this->key = "";
 
 		}elseif($action == 'tokens'){
 			$this->key = $this->keys_data['public_key'];
-		}elseif($action == 'threeds/instruction'){
-			$this->formKey = $this->keys_data['x_consumer_username'];
+
 		}elseif($action == 'validate'){
 			$this->key = $this->keys_data['form_apikey'];
 			$this->formKey = $this->keys_data['form_site'];
@@ -122,7 +102,7 @@ class RESTClient{
     }
 
 	//RESTResource
-	private function RESTService($method = "GET", $data="", $query = array()){
+	private function RESTService($method = "GET", $data, $query = array()){
         $this->encodeHeader64();
 		$header_http = array(
 						'Cache-Control: no-cache',
@@ -131,7 +111,7 @@ class RESTClient{
 						'X-Source:'.$this->jsonData,
 					);
 
-		if($this->action == 'validate' || $this->action == 'threeds/instruction'){
+		if($this->action == 'validate'){
 			array_push($header_http, 'apikey: '. $this->key);
 			array_push($header_http, 'X-Consumer-Username: '. $this->formKey);
 		}else{

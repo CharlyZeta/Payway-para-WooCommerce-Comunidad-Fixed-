@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 
@@ -65,6 +65,13 @@ class WC_Payway_Request {
 	protected $api;
 
 	/**
+	 * Result from the gateway
+	 *
+	 * @var array
+	 */
+	protected $result = array();
+
+	/**
 	 * @var int[]
 	 */
 	protected $error_codes = array();
@@ -102,20 +109,52 @@ class WC_Payway_Request {
 	public $challenge_url = '';
 
 	/**
+	 * Mapping of techical status codes/reason IDs to human-readable messages.
+	 *
+	 * @var array
+	 */
+	protected $friendly_messages = [
+		'card_expired' => 'La tarjeta ha expirado. Por favor, verifica la fecha de vencimiento.',
+		'insufficient_funds' => 'Fondos insuficientes. Por favor, intenta con otra tarjeta.',
+		'security_code_error' => 'El código de seguridad (CVV) es incorrecto.',
+		'card_restricted' => 'La tarjeta está restringida. Contacta a tu banco emisor.',
+		'contact_cardholder' => 'Transacción rechazada por el emisor o el sistema antifraude. Contacta a tu banco o intenta con otra tarjeta.',
+		'stolen_card' => 'Transacción rechazada. Contacta a tu banco emisor.',
+		'invalid_amount' => 'Monto inválido para esta operación.',
+		'invalid_card_number' => 'El número de tarjeta es inválido.',
+		'invalid_expiry_date' => 'La fecha de expiración es inválida.',
+		'3ds_auth_failed' => 'La autenticación 3D Secure ha fallado. Por favor, intenta de nuevo.',
+		'cs_reject' => 'El pago no pudo ser procesado por políticas de seguridad. Por favor, intenta con otra tarjeta.',
+		'cs_review_missing_url' => 'Tu pago requiere una validación adicional que no está disponible en este momento. Por favor, contacta con soporte.',
+		'system_error' => 'Estamos experimentando dificultades técnicas para procesar tu pago. Por favor, intenta nuevamente en unos minutos.',
+		'default' => 'No pudimos procesar tu pago. Por favor, verifica los datos e intenta nuevamente o usa otro medio de pago.'
+	];
+
+	/**
 	 * Constructor.
+	 * Initializes the API handler.
 	 */
 	public function __construct() {
 		$this->api = new WC_Payway_Api_Handler();
 	}
 
+	/**
+	 * Executes the payment request against the Gateway API.
+	 *
+	 * @param array $payment_data Structured data to be sent to the gateway.
+	 * @return $this
+	 * @throws \Exception If a communication or SDK error occurs.
+	 */
 	public function pay( $payment_data ) {
 		try {
 			/** @var WC_Payway_Logger */
 			$logger = wc_payway_get_logger();
+			$logger->debug( 'Iniciando petición de pago a Payway' );
 			$logger->debug( print_r($payment_data, true) );
 
 			/** @var \Decidir\Payment\PaymentResponse $result */
 			$result = $this->api->post_payment( $payment_data );
+			$logger->debug( 'Respuesta recibida de Payway:' );
 			$logger->debug( print_r($result->getDataField(), true) );
 
 			$this->set_result( $result->getDataField() );
@@ -127,65 +166,94 @@ class WC_Payway_Request {
 			$this->set_error_codes( $exception->getCode() );
 			$this->set_error_messages( $this->extract_exception_message( $exception ) );
 
-			$logger->error( '\Decidir\Exception\SdkException catch' );
-			$logger->error( print_r($exception->getMessage(), true) );
-			$logger->error( print_r($exception->getData(), true) );
+			$logger->error( 'Error de SDK de Payway (SdkException):' );
+			$logger->error( 'Mensaje: ' . $exception->getMessage() );
+			$logger->error( 'Datos: ' . print_r($exception->getData(), true) );
 
-			// We'll throw again so plugin can cancel the order
 			throw $exception;
 
 		} catch (\Exception $exception) {
 			$this->set_success( false );
 			$this->set_error_codes( $exception->getCode() );
-			$this->set_error_messages( array( $exception->getMessage() ) );
+			$this->set_error_messages( array( $this->get_friendly_message('system_error') ) );
 
-			$logger->error( '\Exception catch' );
-			$logger->error( print_r($exception->getMessage(), true) );
+			$logger->error( 'Error inesperado en proceso de pago (Exception):' );
+			$logger->error( 'Mensaje: ' . $exception->getMessage() );
 
-			// We'll throw again so plugin can cancel the order
 			throw $exception;
 		}
 
 		return $this;
 	}
 
-	// private function process_exception_response( $exception ) {
-	// 	return $this->process_response(
-	// 		new Decidir\Data\AbstractData( $exception->getData() )
-	// 	);
-	// }
-
 	/**
-	 * Retrieves the exact error from the exception
+	 * Retrieves and formats error messages from an SDK exception.
 	 *
 	 * @param \Decidir\Exception\SdkException $exception
-	 * @return string
+	 * @return array List of error messages.
 	 */
 	private function extract_exception_message( $exception ) {
-		$message = '';
-		$error_type = '';
 		$data = $exception->getData();
-
-		if ( isset( $data['error_type'] )) {
-			$error_type = $data['error_type'];
-		}
+		$messages = [];
 
 		if ( isset($data['validation_errors']) && is_array( $data['validation_errors'] ) ) {
-			$item = $data['validation_errors'][0];
-			$code = isset( $item['code'] )
-				? $item['code']
-				: '';
-			$param = isset( $item['param'] )
-				? $item['param']
-				: '';
-
-			return $error_type . ': ' . $item['code'] . ' ' . $item['param'];
+			foreach ($data['validation_errors'] as $item) {
+				$messages[] = $this->get_friendly_message( $item['code'], $item['param'] );
+			}
+			return $messages;
 		}
 
-		return json_encode( $exception->getData() );
+		// Handle top-level technical errors (e.g. 401, 400, 402)
+		$technical_code = $exception->getCode();
+		if ( in_array($technical_code, [400, 401, 402, 404, 409]) ) {
+			return [ $this->get_friendly_message('system_error') ];
+		}
+
+		return [ $this->get_friendly_message('default') ];
 	}
 
 	/**
+	 * Translates technical error codes to user-friendly messages.
+	 *
+	 * @param string|int $code Technical error code or ID.
+	 * @param string $param Optional parameter name associated with the error.
+	 * @return string Friendly message.
+	 */
+	protected function get_friendly_message( $code, $param = '' ) {
+		$map = [
+			'empty' => 'El campo %s es obligatorio.',
+			'invalid' => 'El valor ingresado en %s es inválido.',
+			'nan' => 'El campo %s debe ser numérico.',
+			'invalid_expiry_date' => $this->friendly_messages['invalid_expiry_date'],
+			'invalid_card_number' => $this->friendly_messages['invalid_card_number'],
+			'system_error' => $this->friendly_messages['system_error'],
+			'contact_cardholder' => $this->friendly_messages['contact_cardholder'],
+			'3ds_auth_failed' => $this->friendly_messages['3ds_auth_failed'],
+			// Decidir Reason IDs mapping
+			'1' => $this->friendly_messages['card_expired'],
+			'2' => $this->friendly_messages['contact_cardholder'],
+			'3' => $this->friendly_messages['contact_cardholder'],
+			'4' => $this->friendly_messages['stolen_card'],
+			'5' => $this->friendly_messages['card_restricted'],
+			'31' => $this->friendly_messages['security_code_error'],
+			'51' => $this->friendly_messages['insufficient_funds'],
+			'57' => $this->friendly_messages['card_restricted'],
+			'62' => $this->friendly_messages['card_restricted'],
+			'13' => $this->friendly_messages['invalid_amount'],
+			// CyberSource specialized keys
+			'REJECT' => $this->friendly_messages['cs_reject'],
+			'MISSING_CHALLENGE_URL' => $this->friendly_messages['cs_review_missing_url'],
+		];
+
+		if ( isset( $map[$code] ) ) {
+			return sprintf( $map[$code], $param );
+		}
+
+		return $this->friendly_messages['default'];
+	}
+
+	/**
+	 * Processes the API response and triggers validation.
 	 *
 	 * @param \Decidir\Payment\PaymentResponse $response
 	 * @return $this
@@ -205,7 +273,9 @@ class WC_Payway_Request {
 	}
 
 	/**
-	 * @param array $response_data
+	 * Orchestrates the validation of response data using multiple validators.
+	 *
+	 * @param array $response_data Data returned by the gateway.
 	 * @return $this
 	 */
 	private function validate( $response_data ) {
@@ -215,7 +285,6 @@ class WC_Payway_Request {
 			'payment_validator'
 		);
 
-		// validate cybersource if enabled
 		if ( wc_payway_config_is_cs_enabled() ) {
 			$validator_methods[] = 'cs_retail_validator';
 		}
@@ -232,24 +301,6 @@ class WC_Payway_Request {
 			}
 		}
 
-		// $result = $this->response_validator( $response_data );
-		// if ( ! $result->is_valid ) {
-		// 	$this->set_success( false );
-		// 	$this->set_error_codes( $result->error_codes );
-		// 	$this->set_error_messages( $result->error_messages );
-		//
-		// 	return $this;
-		// }
-		//
-		// $result = $this->payment_validator( $response_data );
-		// if ( ! $result->is_valid ) {
-		// 	$this->set_success( false );
-		// 	$this->set_error_codes( $result->error_codes );
-		// 	$this->set_error_messages( $result->error_messages );
-		//
-		// 	return $this;
-		// }
-
 		$this->set_success( true );
 		$this->set_error_codes( array() );
 		$this->set_error_messages( array() );
@@ -257,10 +308,10 @@ class WC_Payway_Request {
 	}
 
 	/**
-	 * Checks if general `validation_errors` has occured
+	 * Checks if general validation errors occurred in the API response.
 	 *
 	 * @param array $data
-	 * @return stdClass
+	 * @return stdClass Validation result object.
 	 */
 	private function response_validator( $data ) {
 
@@ -268,20 +319,12 @@ class WC_Payway_Request {
 		$error_messages = array();
 		$error_codes = array();
 
-		// @TODO add validation when response does not contain anything else than a message
-
-		// append the rest of the incoming error data
 		if (isset($data['validation_errors'])) {
-			// SDK does not returns an object when request fails
-			// if `error_type` is present request has failed
 			$is_valid = false;
-			$error_messages[] = 'Gateway Error';
-			$error_messages[] .= ' ' . json_encode($data['validation_errors']);
-
-			// validate first position due SDK response format
-			$error_codes[] = isset($data['validation_errors'][0]['code'])
-				? $data['validation_errors'][0]['code']
-				: self::ERROR_CODES['unknown_error'];
+			foreach ($data['validation_errors'] as $error) {
+				$error_messages[] = $this->get_friendly_message($error['code'], $error['param']);
+				$error_codes[] = $error['code'];
+			}
 		}
 
 		return $this->validator_create_result(
@@ -292,10 +335,10 @@ class WC_Payway_Request {
 	}
 
 	/**
-	 * Checks for a status detail error in the given array
+	 * Validates the specific payment status and reasons returned by Decidir.
 	 *
 	 * @param array $data
-	 * @return stdClass
+	 * @return stdClass Validation result object.
 	 */
 	private function payment_validator( $data ) {
 
@@ -303,10 +346,19 @@ class WC_Payway_Request {
 		$error_messages = array();
 		$error_codes = array();
 
-		if (isset($data['status_details']['error']['type'])) {
+		// Si el estado no es aprobado ni en revisión (3DS), es un error
+		$status = isset($data['status']) ? $data['status'] : '';
+		
+		if ( $status !== 'approved' && $status !== 'review' ) {
 			$is_valid = false;
-			$error_messages[] = $data['status_details']['error']['reason']['description'];
-			$error_codes[] = $data['status_details']['error']['reason']['id'];
+			
+			// Intentamos obtener el ID de razón técnica si existe
+			$reason_id = isset($data['status_details']['error']['reason']['id']) 
+				? $data['status_details']['error']['reason']['id'] 
+				: 'contact_cardholder'; // Por defecto pedimos contactar al emisor
+			
+			$error_messages[] = $this->get_friendly_message($reason_id);
+			$error_codes[] = $reason_id;
 		}
 
 		return $this->validator_create_result(
@@ -317,8 +369,10 @@ class WC_Payway_Request {
 	}
 
 	/**
+	 * Validates CyberSource (fraud detection) results.
+	 *
 	 * @param array $data
-	 * @return stdClass
+	 * @return stdClass Validation result object.
 	 */
 	private function cs_retail_validator( $data ) {
 
@@ -346,11 +400,10 @@ class WC_Payway_Request {
 	}
 
 	/**
-	 * Checks for Cybersource status color
+	 * Analyzes the CyberSource decision and determines if a challenge (3DS) is needed.
 	 *
-	 * @see self::CS_DECISION_SUCCESS_VALUES
 	 * @param array $data
-	 * @return array
+	 * @return array Result containing errors and challenge information.
 	 */
 	private function cs_validate_decision( array $data ) {
 
@@ -361,18 +414,15 @@ class WC_Payway_Request {
 			? $data['fraud_detection']['status']
 			: array();
 
-		// validate if transaction status and decision color are not valid in any combination
 		if (
 			isset($fraud_status_result['decision'])
 			&& !in_array($fraud_status_result['decision'], self::CS_DECISION_SUCCESS_VALUES)
 		) {
-			// Check if it's a 3DS Challenge (YELLOW decision or specific 3DS status)
 			if ($fraud_status_result['decision'] === 'YELLOW' || (isset($data['status']) && $data['status'] === 'review')) {
 				if (isset($fraud_status_result['review_url']) && !empty($fraud_status_result['review_url'])) {
 					$decision['is_challenge'] = true;
 					$decision['challenge_url'] = $fraud_status_result['review_url'];
 				} else {
-					// Fallback if the gateway demands a challenge but provides no URL
 					$decision['errors'] = true;
 					$decision['decision'] = $fraud_status_result['decision'];
 					$decision['description'] = __('Transacción en revisión (3DS) pero la pasarela no proporcionó la URL de autenticación.', 'wc-gateway-payway');
@@ -381,7 +431,7 @@ class WC_Payway_Request {
 			} else {
 				$decision['errors'] = true;
 				$decision['decision'] = $fraud_status_result['decision'];
-				$decision['description'] = $fraud_status_result['description'];
+				$decision['description'] = $this->get_friendly_message('contact_cardholder');
 				$decision['reason_code'] = $fraud_status_result['reason_code'];
 			}
 		}
@@ -390,13 +440,13 @@ class WC_Payway_Request {
 	}
 
 	/**
-     * Factory method
-     *
-     * @param bool $is_valid
-     * @param array $messages
-     * @param array $error_codes
-     * @return stdClass
-     */
+	 * Factory method to create a standardized validation result object.
+	 *
+	 * @param bool $is_valid Whether validation passed.
+	 * @param array $messages List of user-facing messages.
+	 * @param array $error_codes List of technical error codes.
+	 * @return stdClass
+	 */
 	private function validator_create_result(
 		$is_valid,
 		array $messages = [],

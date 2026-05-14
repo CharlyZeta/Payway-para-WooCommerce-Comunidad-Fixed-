@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 
@@ -70,7 +70,10 @@ class WC_Payway_Api_Handler {
 
 		$this->connector = new \Decidir\Connector(
 			$this->credentials,
-			$this->type
+			$this->type,
+			WC_Payway_Rest_Interface::CONNECTOR_DEVELOPER,
+			WC_Payway_Rest_Interface::CONNECTOR_GROUPER,
+			WC_Payway_Rest_Interface::CONNECTOR_SERVICE
 		);
 	}
 

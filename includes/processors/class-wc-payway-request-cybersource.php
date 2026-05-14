@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 
@@ -29,9 +29,17 @@ class WC_Payway_Request_CyberSource_Processor implements WC_Payway_Request_Proce
 	public function process( $order, $checkout_posted_data ) {
 		$cc_door_number = isset($checkout_posted_data['door_number']) ? $checkout_posted_data['door_number'] : '';
 		$device_fingerprint = isset($checkout_posted_data['device_fingerprint']) ? $checkout_posted_data['device_fingerprint'] : '';
-		return array(
+		
+		$data = array(
 			self::FRAUD_DETECTION => $this->get_data( $order, $cc_door_number, $device_fingerprint )
 		);
+
+		/** @var WC_Payway_Logger */
+		$logger = wc_payway_get_logger();
+		$logger->debug( 'Datos preparados para CyberSource:' );
+		$logger->debug( print_r($data[self::FRAUD_DETECTION], true) );
+
+		return $data;
 	}
 
 	/**

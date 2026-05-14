@@ -52,4 +52,9 @@ interface WC_Payway_Meta_Interface
 	 * @var string
 	 */
 	const THREE_DS_AUTHENTICATED = '3ds_authenticated';
+
+	/**
+	 * @var string
+	 */
+	const REJECTION_REASON = 'rejection_reason';
 }

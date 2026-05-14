@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 
@@ -263,9 +263,16 @@ class WC_Payment_Gateway_Payway extends WC_Payment_Gateway {
 
 	/**
 	 * Process the payment and return the result.
+	 * 
+	 * This method orchestrates the payment flow:
+	 * 1. Initializes request processors.
+	 * 2. Builds the payment request data from the checkout form and order.
+	 * 3. Executes the transaction via the Payway API.
+	 * 4. Handles 3D Secure challenges if required.
+	 * 5. Updates the order status and adds notes based on the outcome.
 	 *
-	 * @param int $order_id Order ID.
-	 * @return array
+	 * @param int $order_id WooCommerce Order ID.
+	 * @return array Result of the payment (success/failure and redirect/refresh info).
 	 */
 	public function process_payment( $order_id ) {
 		// Loads all files required to execute the payment request
@@ -276,7 +283,6 @@ class WC_Payment_Gateway_Payway extends WC_Payment_Gateway {
 			$builder = new WC_Payway_Request_Builder();
 
 			// Retrieve custom payment fields
-			// till we find a better way to hook up into WC process
 			$request_data = $builder->set_checkout_form_data( $_POST )
 				->set_order( $order )
 				->process();
@@ -309,12 +315,6 @@ class WC_Payment_Gateway_Payway extends WC_Payment_Gateway {
 
 				$order->payment_complete( $request->get_transaction_id() );
 
-				// currently isn't needed to execute the stock reduction
-				// for those products that are marked as `manage stock`,
-				// it's happening without manually executing it
-				//
-				// $order->reduce_order_stock();
-
 				// Update WC_Order custom fields for custom metabox display
 				$this->update_order_meta( $request->get_result(), $order );
 
@@ -326,19 +326,24 @@ class WC_Payment_Gateway_Payway extends WC_Payment_Gateway {
 					'redirect' => $this->get_return_url( $order )
 				);
 			} else {
+				$friendly_errors = implode( ' ', $request->get_error_messages() );
+				
+				// Persist rejection reason for admin display
+				WC_Payway_Meta::set_order_rejection_reason( $order_id, $friendly_errors );
+
 				wc_add_notice(
-					__('Payment error: ', 'wc-gateway-payway') . json_encode($request->get_error_messages()),
+					__('Error en el pago: ', 'wc-gateway-payway') . $friendly_errors,
 					'error'
 				);
 
-				// Leave an Order message, without notifying
+				// Leave an Order message
 				$this->add_failure_note_to_order(
 					$order,
-					json_encode($request->get_error_messages())
+					$friendly_errors
 				);
 
 				// Cancel the Order
-				$message = 'Order cancelled due to an error while processing in the gateway: ' . json_encode($request->get_error_messages());
+				$message = 'Pago rechazado: ' . $friendly_errors;
 				$order->update_status(
 					'cancelled',
 					__( $message, 'wc-gateway-payway' )
@@ -347,70 +352,70 @@ class WC_Payment_Gateway_Payway extends WC_Payment_Gateway {
 				$result = array(
 					'result'   => 'failure',
 					'refresh' => true,
-					'messages' => json_encode($request->get_error_messages())
+					'messages' => $friendly_errors
 				);
 			}
 
 			return $result;
 
 		} catch ( Exception $e ) {
-			// TODO: log the error through custom wc_get_logger() implementation
+			$error_message = $e->getMessage();
+
 			wc_add_notice(
-				__('Payment error:', 'wc-gateway-payway') . $e->getMessage(),
+				__('Error en el pago:', 'wc-gateway-payway') . $error_message,
 				'error'
 			);
 
-			// Leave an Order message, without notifying
-			$this->add_failure_note_to_order(
-				$order,
-				$e->getMessage()
-			);
-
-			// Cancel the Order
-			$message = 'Order cancelled due to an error while processing in the gateway: ' . $e->getMessage();
-			$order->update_status(
-				'cancelled',
-				__( $message, 'wc-gateway-payway' )
-			);
+			// Leave an Order message
+			if (isset($order)) {
+				$this->add_failure_note_to_order( $order, $error_message );
+				
+				// Cancel the Order
+				$message = 'Error de comunicación con la pasarela: ' . $error_message;
+				$order->update_status(
+					'cancelled',
+					__( $message, 'wc-gateway-payway' )
+				);
+			}
 
 			return array(
 				'result' => 'failure',
 				'refresh' => true,
-				'messages' => $e->getMessage()
+				'messages' => $error_message
 			);
 		}
 	}
 
 	/**
-	 * Adds a success message whether using Cybersource or not
+	 * Adds a failure note to the order with specific error details.
 	 *
-	 * @param WC_Order $order
-	 * @param string $error_message
+	 * @param WC_Order $order The order object.
+	 * @param string $error_message Technical or friendly error message.
 	 */
 	private function add_failure_note_to_order( $order, $error_message = '' ) {
-		$note = __('Order couldn\'t be processed through Payway Payment Gateway', 'wc-gateway-payway');
+		$note = __('El pedido no pudo ser procesado a través de Payway', 'wc-gateway-payway');
 
 		if ( wc_payway_config_is_cs_enabled() ) {
-			$note .= __(' using Cybersource', 'wc-gateway-payway');
+			$note .= __(' (con CyberSource)', 'wc-gateway-payway');
 		}
 
 		if ( $error_message ) {
-			$note .= __(': ' . $error_message, 'wc-gateway-payway');
+			$note .= ': ' . $error_message;
 		}
 
 		$order->add_order_note( $note );
 	}
 
 	/**
-	 * Adds a success message whether using Cybersource or not
+	 * Adds a success note to the order when payment is approved.
 	 *
-	 * @param WC_Order $order
+	 * @param WC_Order $order The order object.
 	 */
 	private function add_success_note_to_order( $order ) {
-		$note = __('Order successfully processed through Payway Payment Gateway', 'wc-gateway-payway');
+		$note = __('Pedido procesado exitosamente a través de Payway', 'wc-gateway-payway');
 
 		if ( wc_payway_config_is_cs_enabled() ) {
-			$note .= __(' using Cybersource', 'wc-gateway-payway');
+			$note .= __(' (con CyberSource)', 'wc-gateway-payway');
 		}
 
 		$order->add_order_note( $note );

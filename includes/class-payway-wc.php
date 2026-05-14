@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 
@@ -268,9 +268,17 @@ final class PaywayWC {
 		$payment_data = WC_Payway_Meta::get_order_payment_data( $order_id, true );
 		$promo = WC_Payway_Meta::get_order_promotion( $order_id, true );
 		$three_ds = WC_Payway_Meta::get_order_3ds_authenticated( $order_id );
+		$rejection_reason = WC_Payway_Meta::get_order_rejection_reason( $order_id );
 		?>
 			<h3><?php _e('Payway Payment Information', 'wc-gateway-payway'); ?></h3>
 			
+			<?php if ( $rejection_reason ): ?>
+			<div style="margin-bottom: 10px; padding: 10px; background: #fcf0f1; border-left: 4px solid #d63638; color: #d63638;">
+				<strong><?php _e('MOTIVO DE RECHAZO:', 'wc-gateway-payway'); ?></strong><br>
+				<span><?php echo esc_html($rejection_reason); ?></span>
+			</div>
+			<?php endif; ?>
+
 			<?php if ( $three_ds === 'yes' ): ?>
 			<div style="margin-bottom: 10px; padding: 5px; background: #e7f4e1; border-left: 4px solid #5b841b; color: #5b841b; font-weight: bold;">
 				<span class="dashicons dashicons-shield-verified" style="vertical-align: middle;"></span>

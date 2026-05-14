@@ -1,6 +1,6 @@
 <?php
 /**
- * @author IURCO - Prisma SA
+ * @author Gerardo Maidana
  * @copyright Copyright © 2022 IURCO and PRISMA. All rights reserved.
  */
 
@@ -23,7 +23,7 @@ interface WC_Payway_Activator_Interface {
 	 * @see wc-gateway-payway/index.php
 	 * @var string
 	 */
-	const WC_PAYWAY_VERSION_VALUE = '0.4.4';
+	const WC_PAYWAY_VERSION_VALUE = '0.4.6';
 
 	/**
 	 * @var string
@@ -33,7 +33,7 @@ interface WC_Payway_Activator_Interface {
 	/**
 	 * @var string
 	 */
-	const WC_PAYWAY_SDK_VERSION_VALUE = '2.0.0';
+	const WC_PAYWAY_SDK_VERSION_VALUE = '1.5.0';
 
 	/**
 	 * @var string

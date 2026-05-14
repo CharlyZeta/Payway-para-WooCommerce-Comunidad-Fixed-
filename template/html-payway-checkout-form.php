@@ -18,11 +18,11 @@ $cart_total = $this->get_order_total();
 		</p>
 		<hr style="border: 1px solid #ddd; margin: 20px 0;">
 	<?php endif; ?>
-	<div id="payway_error_container" style="display:none; color: #a00; background: #fff1f1; padding: 15px; border: 1px solid #a00; margin-bottom: 20px; font-weight: bold;"></div>
-	
+	<div id="error_container"></div>
 	<div class="fields-wrapper">
 		<div class="form-row validate-required">
 			<label for="<?php echo $gateway_field_id; ?>cc_bank"><?php echo __('Bank', 'wc-gateway-payway'); ?> <span class="required">*</span></label>
+			<!-- filled out based on current available promotions -->
 			<select id="<?php echo $gateway_field_id; ?>cc_bank"
 				class="input-text wc-credit-card-form-cc-bank"
 				name="<?php echo $gateway_field_id; ?>cc_bank">
@@ -31,6 +31,7 @@ $cart_total = $this->get_order_total();
 		</div>
 		<div class="form-row validate-required">
 			<label for="<?php echo $gateway_field_id; ?>cc_type"><?php echo __('Card', 'wc-gateway-payway'); ?> <span class="required">*</span></label>
+			<!-- filled out based on current available promotions -->
 			<select id="<?php echo $gateway_field_id; ?>cc_type"
 				class="input-text wc-credit-card-form-cc-type"
 				name="<?php echo $gateway_field_id; ?>cc_type">
@@ -39,6 +40,7 @@ $cart_total = $this->get_order_total();
 		</div>
 		<div class="form-row validate-required">
 			<label for="<?php echo $gateway_field_id; ?>cc_installments"><?php echo __('Installments', 'wc-gateway-payway'); ?> <span class="required">*</span></label>
+			<!-- filled out based on current available promotions -->
 			<select id="<?php echo $gateway_field_id; ?>cc_installments"
 				class="input-text wc-credit-card-form-cc-installments"
 				name="<?php echo $gateway_field_id; ?>cc_installments">
@@ -51,6 +53,7 @@ $cart_total = $this->get_order_total();
 			<input type="text"
 				id="<?php echo $gateway_field_id; ?>cc_number"
 				name="<?php echo $gateway_field_id; ?>cc_number"
+				data-payway="<?php echo $gateway_field_id; ?>cc_number"
 				placeholder="XXXX XXXX XXXX XXXX"
 				class="input-text"
 				autocomplete="off" />
@@ -105,26 +108,27 @@ $cart_total = $this->get_order_total();
 			<input type="text"
 				id="<?php echo $gateway_field_id; ?>cc_doc_number"
 				name="<?php echo $gateway_field_id; ?>cc_doc_number"
+				placeholder=""
 				class="input-text"
 				autocomplete="off" />
 		</div>
 
-		<div class="form-row validate-required">
-			<label for="<?php echo $gateway_field_id; ?>cc_holder_street"><?php echo __('Domicilio (Calle)', 'wc-gateway-payway'); ?> <span class="required">*</span></label>
+		<div class="form-row form-row-half">
+			<label for="cc-direccion"><?php echo __('Direccion de Facturación', 'wc-gateway-payway'); ?></label>
 			<input type="text"
-				id="<?php echo $gateway_field_id; ?>cc_holder_street"
-				name="<?php echo $gateway_field_id; ?>cc_holder_street"
-				placeholder="Ej: Av. Siempre Viva"
+				id="cc-direccion"
+				name="cc-direccion"
+				placeholder=""
 				class="input-text"
 				autocomplete="off" />
 		</div>
 
-		<div class="form-row validate-required">
+		<div class="form-row form-row-half validate-required">
 			<label for="<?php echo $gateway_field_id; ?>cc_holder_door_number"><?php echo __('Altura', 'wc-gateway-payway'); ?> <span class="required">*</span></label>
 			<input type="text"
 				id="<?php echo $gateway_field_id; ?>cc_holder_door_number"
 				name="<?php echo $gateway_field_id; ?>cc_holder_door_number"
-				placeholder="Ej: 123"
+				placeholder=""
 				class="input-text"
 				autocomplete="off" />
 		</div>
@@ -136,150 +140,605 @@ $cart_total = $this->get_order_total();
 	</div>
 	<div class="clear"></div>
 </fieldset>
-
 <script type="text/javascript">
-(function($) {
-    var PaywayHandler = {
-        fid: '<?php echo $gateway_field_id; ?>',
-        isTokenized: false,
+jQuery(function ( $ ) {
+	var wc_payway_checkout_form = {
+		id: 'payway_gateway',
 
-        init: function() {
-            console.log('PaywayHandler: Initializing...');
-            this.bindEvents();
-            this.loadBanks();
-        },
+		// Initializes the current total for Installments calculation
+		cart_total: wc_gateway_payway_params.cart_total,
 
-        bindEvents: function() {
-            var self = this;
-            $('#' + this.fid + 'cc_bank').on('change', this.onBankChange.bind(this));
-            $('#' + this.fid + 'cc_type').on('change', this.onCardChange.bind(this));
-            
-            $(document.body).on('updated_checkout', function() {
-                console.log('PaywayHandler: Checkout updated');
-                self.loadBanks();
-            });
+		$form: $( '#payway_gateway-cc-form' ),
+		$wrapper: $( '.fields-wrapper', this.form ),
+		$error_container: $( '#error_container', this.form ),
+		$banksDropdown: $( '#payway_gateway_cc_bank', this.$form ),
+		$cardsDropdown: $( '#payway_gateway_cc_type', this.$form ),
+		$installmentsDropdown: $( '#payway_gateway_cc_installments', this.$form ),
 
-            // Interceptar el envío del formulario de WooCommerce
-            $('form.checkout').on('checkout_place_order_' + '<?php echo $gateway_identifier; ?>', function() {
-                if (self.isTokenized) return true;
-                self.processTokenization();
-                return false;
-            });
-        },
+		$cardExpirationMonth: $( '#payway_gateway_cc_exp_month', this.$form ),
+		$cardNumber: $( '#payway_gateway_cc_number', this.$form),
+		$cardCVV: $( '#payway_gateway_cc_cid', this.$form),
+		$cardHolderName: $( '#payway_gateway_cc_holder_name', this.$form),
+		$cardHolderDocumentType: $( '#payway_gateway_cc_doc_type', this.$form),
+		$cardHolderDocumentNumber: $( '#payway_gateway_cc_doc_number', this.$form),
+		$cardExpirationYear: $( '#payway_gateway_cc_exp_year', this.$form),
+		$cardHolderDoorNumber: $( '#payway_gateway_cc_holder_door_number', this.$form),
 
-        loadBanks: function() {
-            var $bankSelect = $('#' + this.fid + 'cc_bank');
-            var banks = wc_gateway_payway_params.promotions.banks;
-            
-            $bankSelect.empty().append('<option value="">Por favor seleccione...</option>');
-            if (banks) {
-                $.each(banks, function(i, bank) {
-                    $bankSelect.append($('<option>', { value: bank.value, text: bank.name }));
-                });
-            }
-        },
+		config: {
+		  endpoint_url: wc_gateway_payway_params.endpoint_url,
+		  sandboxEnabled: Boolean( wc_gateway_payway_params.sandbox_enabled ),
+		  credentials: {
+		    public_key: wc_gateway_payway_params.creds.public_key
+		  },
+		  promotions: wc_gateway_payway_params.promotions,
+		  currencySettings: typeof wc_gateway_payway_accounting_format !== 'undefined'
+		    ? wc_gateway_payway_accounting_format
+		    : {},
+			form: {
+				fields: {
+					cardNumber: '#payway_gateway_cc_number',
+					cardCVV: '#payway_gateway_cc_cid',
+					cardHolderName: '#payway_gateway_cc_holder_name',
+					cardHolderDocumentType: '#payway_gateway_cc_doc_type',
+					cardHolderDocumentNumber: '#payway_gateway_cc_doc_number',
+					cardExpirationMonth: '#payway_gateway_cc_exp_month',
+					cardExpirationYear: '#payway_gateway_cc_exp_year',
+					bankDropdown: '#payway_gateway_cc_bank',
+					cardDropdown: '#payway_gateway_cc_type',
+					installmentsDropdown: '#payway_gateway_cc_installments',
+					placeOrderButton: '#place_order',
+					cardHolderDoorNumber: '#payway_gateway_cc_holder_door_number'
+				},
+			}
+		},
+		// Holder for Payway SDK
+		api: false,
+		isTokenReady: false,
 
-        onBankChange: function() {
-            var bankId = $('#' + this.fid + 'cc_bank').val();
-            var $cardSelect = $('#' + this.fid + 'cc_type');
-            var $insSelect = $('#' + this.fid + 'cc_installments');
+		// Whether we've hydrate Payment form options or not
+		loadReady: false,
 
-            $cardSelect.empty().append('<option value="">Por favor seleccione...</option>');
-            $insSelect.empty().append('<option value="">Por favor seleccione...</option>');
+		init_error_message: function () {
+			var message = 'WC Gateway Payway: either required params or SDK could not be loaded';
+			console.error( message );
 
-            if (bankId && wc_gateway_payway_params.promotions.cards[bankId]) {
-                $.each(wc_gateway_payway_params.promotions.cards[bankId], function(i, card) {
-                    $cardSelect.append($('<option>', { value: card.value, text: card.name }));
-                });
-            }
-        },
+			// hide form fields and display the exception
+			this.$wrapper.hide();
+			this.$error_container.empty().html( message );
+		},
 
-        onCardChange: function() {
-            var bankId = $('#' + this.fid + 'cc_bank').val();
-            var cardId = $('#' + this.fid + 'cc_type').val();
-            var $insSelect = $('#' + this.fid + 'cc_installments');
-            var cartTotal = parseFloat($('#<?php echo $gateway_identifier; ?>-cc-form').data('cart-total')) || 0;
+		init: function () {
+			console.log('init...');
+			// if ( typeof wc_gateway_payway_params === 'undefined'
+			// 	 || typeof Payway === 'undefined'
+			// 	 || typeof PaywayCheckoutForm === 'undefined'
+			//   ) {
+			//    this.init_error_message();
+			//    return
+			// }
 
-            $insSelect.empty().append('<option value="">Por favor seleccione...</option>');
+			// in case we've a previous error
+			this.$error_container.empty().hide();
 
-            if (bankId && cardId && wc_gateway_payway_params.promotions.plans[bankId][cardId]) {
-                $.each(wc_gateway_payway_params.promotions.plans[bankId][cardId], function(i, plan) {
-                    var total = cartTotal * (parseFloat(plan.coefficient) || 1);
-                    var cuota = total / parseInt(plan.fee_period);
-                    var text = plan.fee_period + ' x ' + accounting.formatMoney(cuota, wc_gateway_payway_accounting_format) + ' (' + accounting.formatMoney(total, wc_gateway_payway_accounting_format) + ')';
-                    $insSelect.append($('<option>', { 
-                        value: plan.rule_id + '-' + cardId + '-' + plan.fee_to_send, 
-                        text: text 
-                    }));
-                });
-            }
-        },
+			this._attachListeners();
+			this._loadPromotions();
+			this._initRadioListeners();
 
-        processTokenization: function() {
-            var self = this;
-            var $errorBox = $('#payway_error_container');
-            $errorBox.hide().empty();
+			// TODO: hook up into the custom event instead of the place order button
+			// (current issue place order triggering twice)
+			// $( 'form.checkout' ).on( 'checkout_place_order_' + this.id, this.capturePlaceOrder.bind(this) );
+		},
 
-            console.log('PaywayHandler: Starting tokenization...');
+		log: function() {
+			//This fun here update the cart_total value when the user changes the shipping method
+			this.mapAmountFromDom();
 
-            // Validar campos locales
-            var requiredFields = ['cc_bank', 'cc_type', 'cc_installments', 'cc_number', 'cc_exp_month', 'cc_exp_year', 'cc_cid', 'cc_holder_name', 'cc_doc_number', 'cc_holder_street', 'cc_holder_door_number'];
-            var missing = false;
-            $.each(requiredFields, function(i, field) {
-                if (!$('#' + self.fid + field).val()) {
-                    missing = true;
-                    return false;
-                }
-            });
+			if ( this.config.sandboxEnabled && typeof console === 'object' ) {
+				console.log( '** payway', ...arguments );
+			}
+		},
 
-            if (missing) {
-                alert('Por favor complete todos los campos de la tarjeta y domicilio.');
-                return;
-            }
+		mapAmountFromDom() {
+			var formTotal = parseFloat(this.$form.data('cart-total'));
+			if (!isNaN(formTotal)) {
+				this.cart_total = formTotal;
+			}
+		},
 
-            var sdk = new Decidir(wc_gateway_payway_params.endpoint_url, !wc_gateway_payway_params.cybersource_enabled);
-            sdk.setPublishableKey(wc_gateway_payway_params.creds.public_key);
+		_attachListeners: function () {
+			this.log('attaching listeners');
+			$( this.$banksDropdown ).on('change', this.onBanksChange.bind(this) );
+			$( this.$cardsDropdown ).on( 'change', this.onCardsChange.bind(this) );
+			$( this.$installmentsDropdown ).on( 'change', this.onInstallmentsChange.bind(this) );
 
-            var formData = {
-                card_number: $('#' + this.fid + 'cc_number').val().replace(/\s/g, ''),
-                security_code: $('#' + this.fid + 'cc_cid').val(),
-                card_expiration_month: $('#' + this.fid + 'cc_exp_month').val(),
-                card_expiration_year: $('#' + this.fid + 'cc_exp_year').val(),
-                card_holder_name: $('#' + this.fid + 'cc_holder_name').val(),
-                card_holder_doc_type: $('#' + this.fid + 'cc_doc_type').val(),
-                card_holder_doc_number: $('#' + this.fid + 'cc_doc_number').val(),
-                card_holder_street: $('#' + this.fid + 'cc_holder_street').val(),
-                card_holder_door_number: $('#' + this.fid + 'cc_holder_door_number').val()
-            };
+			$( this.$cardExpirationMonth ).on( 'blur change', this.validateCardExpirationMonth.bind(this) );
+			$( this.$cardExpirationYear ).on( 'blur change', this.validateCardExpirationYear.bind(this) );
+			$( this.$cardHolderDocumentNumber ).on( 'blur change', this.validateCardDocumentNumber.bind(this) );
+			$( this.$cardHolderDoorNumber ).on( 'blur change', this.validateDoorNumber.bind(this) );
+			// TODO: replace with a listener into `checkout_place_order_`
+			$( this.config.form.fields.placeOrderButton ).on( 'click', this.capturePlaceOrder.bind(this) );
+		},
 
-            console.log('PaywayHandler: Sending data to SDK', formData);
+			_initRadioListeners: function() {
+			//This renews to default value the installments data from the form every time the shipping option is changed.
+				var self = this;
+					$('body').on('click', 'input.shipping_method', function() {
+						self.$banksDropdown.val(self.$banksDropdown.find('option:first').val());
+						self.$cardsDropdown.val(self.$cardsDropdown.find('option:first').val());
+						self.$installmentsDropdown.val(self.$installmentsDropdown.find('option:first').val());
+				});
+		},
 
-            sdk.createToken(formData, function(status, response) {
-                console.log('PaywayHandler: SDK Response', status, response);
-                if (status === 200 || status === 201) {
-                    $('#' + self.fid + 'cc_token').val(response.id);
-                    $('#' + self.fid + 'cc_bin').val(response.bin);
-                    $('#' + self.fid + 'cc_last_digits').val(response.last_four_digits);
-                    
-                    if (typeof sdk.getDeviceId === 'function') {
-                        $('#' + self.fid + 'device_fingerprint').val(sdk.getDeviceId());
-                    }
+		_getFormValue: function ( fieldConfigKey ) {
+			this.log('getFormValue', this.config.form.fields[fieldConfigKey]);
+			this.log('getFormValue', $( this.config.form.fields[fieldConfigKey], this.$form ).val());
 
-                    self.isTokenized = true;
-                    console.log('PaywayHandler: Token success, submitting form...');
-                    $('form.checkout').submit();
-                } else {
-                    var errorMsg = "Error en la tarjeta";
-                    if (response.error_type) errorMsg = response.error_type;
-                    if (response.validation_errors) errorMsg += ": " + response.validation_errors[0].code;
-                    
-                    $errorBox.text(errorMsg).show();
-                    $('html, body').animate({ scrollTop: $errorBox.offset().top - 100 }, 500);
-                }
-            });
-        }
-    };
+			return $( this.config.form.fields[fieldConfigKey], this.$form ).val();
+		},
 
-    $(document).ready(function() { PaywayHandler.init(); });
-})(jQuery);
+		_generateDummyForm: function ( formValues ) {
+			var htmlInputList = '',
+			fieldList = [
+				{'name': 'card_number', 'value': formValues.cc_number},
+				{'name': 'security_code', 'value': formValues.cc_cid},
+				{'name': 'card_expiration_month', 'value': formValues.cc_exp_month},
+				{'name': 'card_expiration_year', 'value': formValues.cc_exp_year},
+				{'name': 'card_holder_name', 'value': formValues.card_holder_name},
+				{'name': 'card_holder_doc_type', 'value': formValues.card_holder_doc_type},
+				{'name': 'card_holder_doc_number', 'value': formValues.card_holder_doc_number},
+				{'name': 'card_holder_door_number', 'value': formValues.card_holder_door_number}
+
+			];
+
+			htmlInputList = document.createElement('div');
+
+			for (var i = 0; i < fieldList.length; i++) {
+				var field = document.createElement('input')
+				field.setAttribute('type', 'text');
+				field.setAttribute('name', fieldList[i].name);
+				field.setAttribute('data-decidir', fieldList[i].name);
+				field.setAttribute('value', fieldList[i].value);
+
+				htmlInputList.appendChild(field);
+			}
+
+			return htmlInputList;
+		},
+
+		_buildDummyForm: function () {
+			var holderName = this._getFormValue( 'cardHolderName' ),
+				ccCVV = this._getFormValue('cardCVV'),
+				ccNumber = this._getFormValue( 'cardNumber' ),
+				expMonth = this._getFormValue( 'cardExpirationMonth' ),
+				expYear = this._getFormValue( 'cardExpirationYear' ),
+				holderDocType = this._getFormValue( 'cardHolderDocumentType' ),
+				holderDocNumber = this._getFormValue( 'cardHolderDocumentNumber' ),
+				holderDoorNUmber = this._getFormValue( 'cardHolderDoorNumber' )
+
+			 formData = this._generateDummyForm({
+				card_holder_name: holderName,
+				cc_cid: ccCVV,
+				cc_number: ccNumber,
+				cc_exp_month: expMonth,
+				cc_exp_year: expYear,
+				card_holder_doc_type: holderDocType,
+				card_holder_doc_number: holderDocNumber,
+				card_holder_door_number: holderDoorNUmber
+			});
+
+			return formData;
+		},
+
+		_loadToken: function ( data ) {
+			this.log('loadToken', this, data);
+
+			this.api = new Decidir(
+			  this.config.endpoint_url,
+			  this.config.disableCybersource
+			);
+
+			this.api.setPublishableKey(this.config.credentials.public_key);
+			this.api.setTimeout(0);
+
+			return new Promise(function ( resolve, reject ) {
+			  this.api.createToken( data, function ( status, data ) {
+				this.log('* createToken success:', status, data);
+				if ( status === 200 || status === 201 ) {
+				  resolve( data );
+				}
+
+				reject( new Error('Token cannot be generated at this moment') );
+			  }.bind(this));
+			}.bind(this));
+		},
+
+		_beforePlaceOrder: function ( data ) {
+			this.log('* beforePlaceOrder', this, data);
+
+			return this._loadToken( data )
+			  .then(
+				function ( result ) {
+				  this.log('* beforePlaceOrder resolve:', result);
+				  return Promise.resolve( result );
+				}.bind(this),
+				function ( error ) {
+				  this.log('* beforePlaceOrder reject:', error);
+				  return Promise.reject( error );
+				}.bind(this)
+			  );
+	  	},
+
+		_onSDKLoadFailure: function () {
+			/** global wc_payway_initialization_error_message */
+			wc_payway_initialization_error_message();
+		},
+
+		_validateGatewayForm: function() {
+			// for now, check if a form field still shows an error or not
+			return $('.form-row.woocommerce-invalid', this.$form).length < 1;
+		},
+
+		capturePlaceOrder: function (e) {
+			this.log('capturePlaceOrder');
+
+		    // ensure our gateway is the one selected
+		    if( ! $('#payment_method_payway_gateway').is(':checked') ) {
+		      this.log('gateway selected isnt Payway, moving on...');
+		      return true;
+		    }
+
+			if ( !this._validateGatewayForm()  ) {
+				this.log('capturePlaceOrder: invalid, exiting...');
+				return false;
+			}
+
+			this.log('* onPlaceOrder');
+
+			this.isTokenReady = false;
+
+			var formData = this._buildDummyForm();
+
+			this.log('before-create-token', formData);
+			if ( !formData ) {
+				return false;
+			}
+
+		   this._beforePlaceOrder( formData )
+		     .then(
+		       function ( result ) {
+		         var dfp = '';
+		         if (this.api && typeof this.api.getDeviceId === 'function') {
+		             dfp = this.api.getDeviceId();
+		         } else {
+                     // Fallback to random session id or tracking logic if needed, but Decidir.getDeviceId() should cover it.
+                 }
+                 
+		         var data = {
+		           bin: result.bin ? result.bin : '',
+		           token: result.id ? result.id : '',
+		           last_four_digits: result.last_four_digits ? result.last_four_digits : '',
+		           device_fingerprint: dfp
+		         };
+
+		         this.log('token success: ', result, data);
+
+		         $( '#payway_gateway_cc_bin', this.$form ).val(data.bin);
+		         $( '#payway_gateway_device_fingerprint', this.$form ).val(data.device_fingerprint);
+		         $( '#payway_gateway_cc_token', this.$form ).val(data.token);
+		         $( '#payway_gateway_cc_last_digits', this.$form ).val(data.last_four_digits);
+
+		         this.isTokenReady = true;
+
+		         return typeof wc_checkout_form != 'undefined'
+		           ? wc_checkout_form.$order_review.trigger('submit')
+		           : $( '#payment_method_payway_gateway' ).closest( 'form' ).submit();
+
+		       }.bind(this),
+		       function (error) {
+		         console.error(error);
+		         alert('Payment Token could not be generated at this time.');
+			 	}.bind(this)
+		     );
+
+			return false;
+		},
+
+		_loadPromotions: function () {
+			var promos = this.config.promotions,
+			  $bankField = this.$banksDropdown;
+
+			this.log('loadPromotions', promos);
+			this.log($bankField);
+
+			if ( !this.config.promotions.banks || !$bankField.length ) {
+			  console.error('PAYWAY - no banks found');
+			  return;
+			}
+
+			// default option
+			$bankField.empty()
+			  .append( $('<option>', { value: '', text: 'Por favor seleccione...'}));
+
+			$.each( this.config.promotions.banks, function ( i, bank ) {
+			  $bankField.append($('<option>', {
+				value: bank.value,
+				text: bank.name
+			  }));
+			});
+		},
+
+		validateCardExpirationMonth: function () {
+		    var $field = this.$cardExpirationMonth || false,
+				date = new Date(),
+				currentYear = date.getFullYear().toString().substr(2),
+				month = date.getMonth() + 1,
+				currentMonth = month.length === 1
+					? '0' + month
+					: month;
+
+			// field missing
+			if ( !$field ) {
+				return false;
+			}
+
+			var value = $field.val() || '';
+
+			/**
+			 * Validates if:
+			 * - empty
+			 * - length of the value is higher than 2
+			 * - value can't be converted into a number
+			 * - value is lower than 1
+			 * - value is higher than 12
+			 */
+		    if (value === ''
+				|| value.length > 2
+				|| isNaN(value)
+				|| value < 1
+				|| value > 12
+			) {
+		      // $field.val('');
+		      $field.closest('.form-row').addClass('woocommerce-invalid');
+		      return false;
+		    }
+
+			if (value.length === 1) {
+				value = '0' + value;
+				$field.val(value);
+			}
+
+			// if there's a year already filled in, and it's the current year
+			// then validate that month isn't lower than the current one
+			if (this.$cardExpirationYear.val()
+				&& this.$cardExpirationYear.val() === currentYear
+				&& (value < currentMonth)
+			) {
+				$field.closest('.form-row').addClass('woocommerce-invalid');
+				return false;
+			}
+
+		    $field.addClass('woocommerce-validated');
+			return true;
+		},
+
+		validateCardExpirationYear: function () {
+			var $field = this.$cardExpirationYear || false,
+				date = new Date(),
+				currentYear = date.getFullYear().toString().substr(2),
+				month = date.getMonth() + 1,
+				currentMonth = month.length === 1
+					? '0' + month
+					: month;
+
+			if (!$field) {
+				return false;
+			}
+
+			var value = $field.val() || '';
+
+			/**
+			 * Validates if:
+			 * - empty
+			 * - value can't be converted into a number
+			 * - length of the value diff to 2
+			 * - value is lower than the current Year
+			 */
+			if (value === ''
+				|| isNaN(value)
+				|| value.length !== 2
+				|| value < currentYear
+			) {
+				$field.closest('.form-row').addClass('woocommerce-invalid');
+				return false;
+			}
+
+			// We'll only allow same year if month it's equal to the current
+			if (currentYear === value
+				&& this.$cardExpirationMonth.val()
+				&& this.$cardExpirationMonth.val() < currentMonth
+			) {
+				$field.closest('.form-row').addClass('woocommerce-invalid');
+				return false;
+			}
+
+		    $field.val(value);
+		    $field.addClass('woocommerce-validated');
+			return true;
+		},
+
+		validateCardDocumentNumber: function () {
+			var $field = this.$cardHolderDocumentNumber || false;
+
+			if (!$field) {
+				return false;
+			}
+
+			var value = $field.val() || '';
+
+			/**
+			 * Validates if:
+			 * - document number has a value
+			 * - value has, at least, 7 digits
+			 * - value can be converted into a number
+			 */
+			if (value === '' || value.length <= 6 || isNaN(value)) {
+				$field.closest('.form-row').addClass('woocommerce-invalid');
+				return false;
+			}
+
+			$field.val(value);
+		    $field.addClass('woocommerce-validated');
+			return true;
+		},
+
+		validateDoorNumber: function () {
+			var $field = this.$cardHolderDoorNumber || false;
+
+			if (!$field) {
+				return false;
+			}
+
+			var value = $field.val() || '';
+
+			
+			if (value === '' || isNaN(value)) {
+				$field.closest('.form-row').addClass('woocommerce-invalid');
+				return false;
+			}
+
+			$field.val(value);
+		    $field.addClass('woocommerce-validated');
+			return true;
+		},
+
+		onBanksChange: function () {
+			this.log('onBankChange');
+		    var bankId = this.$banksDropdown.val(),
+		      $cardField = this.$cardsDropdown,
+		      $installmentsDropdown = this.$installmentsDropdown;
+
+
+		    // Removes validations
+		    $installmentsDropdown.closest('.form-row')
+		      .removeClass( 'woocommerce-validated woocommerce-invalid woocommerce-invalid-required-field' );
+		    $cardField.closest('.form-row')
+		      .removeClass( 'woocommerce-validated woocommerce-invalid woocommerce-invalid-required-field' );
+
+		    $installmentsDropdown.empty()
+		      .append($('<option>', {
+		        value: '',
+		        text: 'Por favor seleccione...'
+		      }));
+
+		    $cardField.empty()
+		      .append($('<option>', {
+		        value: '',
+		        text: 'Por favor seleccione...'
+		      }));
+
+		    $.each( this.config.promotions.cards[bankId], function ( i, card ) {
+		      this.log(card);
+
+		      $cardField.append($('<option>', {
+		        value: card.value,
+		        text: card.name
+		      }));
+		    }.bind( this ));
+		},
+
+		onCardsChange: function () {
+			var bankId = this.$banksDropdown.val(),
+			  cardId = this.$cardsDropdown.val(),
+			  grandTotal = this.cart_total,
+		      $installmentsField = this.$installmentsDropdown;
+
+		    this.log('onCardChange');
+
+		    if (!bankId) {
+		      return;
+		    }
+
+		    // Removes validations
+		    $installmentsField.closest('.form-row')
+		      .removeClass( 'woocommerce-validated woocommerce-invalid woocommerce-invalid-required-field' );
+
+		    $installmentsField.empty()
+		      .append($('<option>', {
+		        value: '',
+		        text: 'Por favor seleccione...'
+		      }));
+
+		    this.log(bankId, cardId);
+		    this.log(this.config.promotions.plans[bankId][cardId]);
+
+		    $.each( this.config.promotions.plans[bankId][cardId], function (i, plan) {
+		      this.log('parsing plan: ', i, plan);
+
+		      var coefficient = parseFloat(plan.coefficient),
+		        charge = 0,
+		        optionText = "",
+		        feePeriod = plan.fee_period,
+		        installmentPrice = (this.cart_total) / parseInt(feePeriod),
+		        total = parseFloat(this.cart_total);
+
+		      if (coefficient > 1 ) {
+		        charge = parseFloat(parseFloat((total * coefficient) - total));
+		        installmentPrice = (total + charge) / parseInt(feePeriod);
+		      }
+
+		      this.log(total, charge, installmentPrice, feePeriod);
+
+		      optionText = feePeriod +
+		        ' x ' +
+		        accounting.formatMoney(installmentPrice, this.config.currencySettings) +
+		        ' (' + accounting.formatMoney((total + charge), this.config.currencySettings) + ')'
+		      ;
+
+		      $installmentsField.append($('<option>', {
+		        value: plan.rule_id + '-' + cardId + '-' + plan.fee_to_send,
+		        text: optionText
+		      }));
+
+		    }.bind(this));
+		},
+
+		onInstallmentsChange: function () {
+			console.log('onInstallmentsChange');
+			this.log('onInstallmentChange');
+
+		    var bankId = this.$banksDropdown.val(),
+		      cardId = this.$cardsDropdown.val(),
+		      grandTotal = parseFloat(this.cart_total),
+		      $installmentsField = this.$installmentsDropdown
+		      value = $installmentsField.val();
+
+		    this.log('installments value ', value);
+		},
+
+		onUpdatedCheckout: function () {
+			this.log('onUpdatedCheckout', this, event);
+
+			/**
+			 * @TODO: implement an object create validation for the SDK
+			 *
+			 * currently there's no way for us to check if the object was loaded OK
+			 * based on the attributes that the object currently holds
+			 * ex: if (!this.api.hasOwnProperty('orgId')) { ... }
+			 */
+
+			// If we already processed the form, then exit
+			// TODO: bootstrap in a different way and remove this `loadReady` property
+			if ( this.loadReady ) {
+				this.log('already initialized, exitting...');
+				return;
+			}
+
+			// looking good lets load all available promotions
+			this._loadPromotions(this);
+			this.loadReady = true;
+		},
+	};
+
+	wc_payway_checkout_form.init();
+});
 </script>
